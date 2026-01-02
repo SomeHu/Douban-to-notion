@@ -1,6 +1,7 @@
 import os
-from douban_fetch import fetch_collect_movies
-from notion_client import NotionClient
+from src.douban_fetch import fetch_collect_movies
+from src.notion_client import NotionClient
+
 
 if __name__ == "__main__":
     douban_user = os.getenv("DOUBAN_USER_ID")
