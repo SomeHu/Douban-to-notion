@@ -14,38 +14,19 @@ class NotionClient:
         }
 
     def create_movie(self, movie):
-        """
-        movie = {
-            title: str,
-            douban_id: str,
-            url: str,
-            status: collect | wish | do
-        }
-        """
-
-        title = movie["title"].replace("\n", " ").strip()
-
         properties = {
             "Name": {
                 "title": [
-                    {
-                        "text": {
-                            "content": title
-                        }
-                    }
+                    {"text": {"content": movie["title"]}}
                 ]
             },
             "Douban ID": {
                 "rich_text": [
-                    {
-                        "text": {
-                            "content": movie.get("douban_id", "")
-                        }
-                    }
+                    {"text": {"content": movie.get("douban_id", "")}}
                 ]
             },
             "Douban Link": {
-                "url": movie.get("url", "")
+                "url": movie.get("url")
             },
             "Status": {
                 "select": {
@@ -59,11 +40,45 @@ class NotionClient:
             }
         }
 
-        try:
-            self.client.pages.create(
-                parent={"database_id": self.database_id},
-                properties=properties
-            )
-        except Exception as e:
-            print(f"❌ Failed to create page: {title}")
-            print(e)
+        if movie.get("douban_rating") is not None:
+            properties["Douban Rating"] = {
+                "number": movie["douban_rating"]
+            }
+
+        if movie.get("director"):
+            properties["Director"] = {
+                "rich_text": [
+                    {"text": {"content": movie["director"]}}
+                ]
+            }
+
+        if movie.get("release_date"):
+            properties["Release Date"] = {
+                "date": {
+                    "start": movie["release_date"]
+                }
+            }
+
+        if movie.get("genres"):
+            properties["Genres"] = {
+                "multi_select": [
+                    {"name": g} for g in movie["genres"]
+                ]
+            }
+
+        if movie.get("my_rating") is not None:
+            properties["My Rating"] = {
+                "number": movie["my_rating"]
+            }
+
+        if movie.get("rating_date"):
+            properties["Rating Date"] = {
+                "date": {
+                    "start": movie["rating_date"]
+                }
+            }
+
+        self.client.pages.create(
+            parent={"database_id": self.database_id},
+            properties=properties
+        )
