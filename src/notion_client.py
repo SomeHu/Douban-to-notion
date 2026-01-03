@@ -7,26 +7,45 @@ class NotionClient:
         self.database_id = database_id
 
     def find_by_douban_id(self, douban_id: str):
-        resp = self.client.databases.query(
-            database_id=self.database_id,
-            filter={
-                "property": "douban_id",
-                "rich_text": {"equals": douban_id}
-            }
+        """
+        用 search API 查找指定 database 中 douban_id 相同的页面
+        兼容老版本 notion-client
+        """
+        resp = self.client.search(
+            query=douban_id,
+            filter={"property": "object", "value": "page"}
         )
-        results = resp.get("results", [])
-        return results[0]["id"] if results else None
+
+        for page in resp.get("results", []):
+            parent = page.get("parent", {})
+            if parent.get("database_id") != self.database_id:
+                continue
+
+            props = page.get("properties", {})
+            douban_prop = props.get("douban_id")
+            if not douban_prop:
+                continue
+
+            texts = douban_prop.get("rich_text", [])
+            if texts and texts[0]["plain_text"] == douban_id:
+                return page["id"]
+
+        return None
 
     def build_props(self, movie: dict):
         props = {
             "标题": {
-                "title": [{"text": {"content": movie["title"]}}]
+                "title": [
+                    {"text": {"content": movie["title"]}}
+                ]
             },
             "状态": {
                 "select": {"name": movie["status"]}
             },
             "douban_id": {
-                "rich_text": [{"text": {"content": movie["douban_id"]}}]
+                "rich_text": [
+                    {"text": {"content": movie["douban_id"]}}
+                ]
             }
         }
 
