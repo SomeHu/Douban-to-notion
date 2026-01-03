@@ -64,5 +64,9 @@ class NotionClient:
             print("🆕 新建：", movie["title"])
             self.client.pages.create(
                 parent={"database_id": self.database_id},
+                icon={
+                    "type": "emoji",
+                    "emoji": "📺"
+                },
                 properties=props
             )
