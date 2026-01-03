@@ -55,10 +55,15 @@ class NotionClient:
                 "date": {"start": movie["rating_date"]}
             }
 
+        # 🎬 导演：Multi-select（即使只有一个，也当数组处理）
         if movie.get("director"):
+            directors = movie["director"]
+            if isinstance(directors, str):
+                directors = [directors]
+
             props["导演"] = {
-                "rich_text": [
-                    {"text": {"content": movie["director"]}}
+                "multi_select": [
+                    {"name": d} for d in directors if d
                 ]
             }
 
