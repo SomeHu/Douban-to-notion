@@ -9,11 +9,9 @@ class NotionClient:
     def create_movie(self, movie):
         print("🧾 写入 Notion：", movie["title"])
 
-        properties = {
+        props = {
             "标题": {
-                "title": [
-                    {"text": {"content": movie["title"]}}
-                ]
+                "title": [{"text": {"content": movie["title"]}}]
             },
             "状态": {
                 "select": {"name": movie["status"]}
@@ -21,21 +19,30 @@ class NotionClient:
         }
 
         if movie.get("douban_rating") is not None:
-            properties["豆瓣评分"] = {
-                "number": movie["douban_rating"]
-            }
+            props["豆瓣评分"] = {"number": movie["douban_rating"]}
 
         if movie.get("my_rating") is not None:
-            properties["我的评分"] = {
-                "number": movie["my_rating"]
-            }
+            props["我的评分"] = {"number": movie["my_rating"]}
 
         if movie.get("rating_date"):
-            properties["评分日期"] = {
-                "date": {"start": movie["rating_date"]}
+            props["评分日期"] = {"date": {"start": movie["rating_date"]}}
+
+        if movie.get("director"):
+            props["导演"] = {
+                "rich_text": [{"text": {"content": movie["director"]}}]
+            }
+
+        if movie.get("genres"):
+            props["类型"] = {
+                "multi_select": [{"name": g} for g in movie["genres"]]
+            }
+
+        if movie.get("release_date"):
+            props["上映日期"] = {
+                "date": {"start": movie["release_date"]}
             }
 
         self.client.pages.create(
             parent={"database_id": self.database_id},
-            properties=properties
+            properties=props
         )
