@@ -33,7 +33,7 @@ def fetch_movies_by_status(douban_user, status):
             douban_id = m.group(1) if m else ""
 
             movies.append({
-                "title": title.text.strip(),
+                "title": " ".join(title.stripped_strings),
                 "douban_id": douban_id,
                 "url": link["href"],
                 "status": status
