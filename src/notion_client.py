@@ -117,3 +117,60 @@ class NotionClient:
                 properties=props,
                 icon={"emoji": "📺"}
             )
+        # --------------------------------
+    # 清理重复页面（按豆瓣ID）
+    # --------------------------------
+    def cleanup_duplicates(self):
+        print("🧹 开始清理 Notion 重复页面")
+
+        pages_by_douban = {}
+        cursor = None
+
+        while True:
+            resp = self.client.search(
+                filter={
+                    "property": "object",
+                    "value": "page"
+                },
+                start_cursor=cursor
+            )
+
+            for page in resp.get("results", []):
+                parent = page.get("parent", {})
+                if parent.get("database_id") != self.database_id:
+                    continue
+
+                props = page.get("properties", {})
+                douban_prop = props.get("豆瓣ID")
+
+                if not douban_prop:
+                    continue
+
+                texts = douban_prop.get("rich_text", [])
+                if not texts:
+                    continue
+
+                douban_id = texts[0]["text"]["content"]
+
+                pages_by_douban.setdefault(douban_id, []).append(page)
+
+            if not resp.get("has_more"):
+                break
+            cursor = resp.get("next_cursor")
+
+        # 真正删除（archive）
+        removed = 0
+        for douban_id, pages in pages_by_douban.items():
+            if len(pages) <= 1:
+                continue
+
+            # 保留第一个，其余 archive
+            for page in pages[1:]:
+                self.client.pages.update(
+                    page_id=page["id"],
+                    archived=True
+                )
+                removed += 1
+
+        print(f"🗑 已清理重复页面 {removed} 个")
+
