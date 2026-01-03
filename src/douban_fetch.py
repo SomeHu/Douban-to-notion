@@ -33,8 +33,18 @@ def fetch_collect_movies(user_id, page_limit=1):
             title = item.select_one(".title")
             title_text = title.text.strip() if title else "Unknown"
 
-            link = item.select_one("a")["href"]
-            douban_id = re.search(r"subject/(\\d+)/", link).group(1)
+        link_tag = item.select_one("a")
+        if not link_tag:
+            continue
+        
+        link = link_tag.get("href", "")
+        match = re.search(r"subject/(\d+)/", link)
+        
+        if not match:
+            # 不是影视条目，直接跳过
+            continue
+        
+        douban_id = match.group(1)
 
             year = None
             year_node = item.select_one(".intro")
