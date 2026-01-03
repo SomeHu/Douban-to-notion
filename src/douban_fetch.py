@@ -1,5 +1,6 @@
 import requests
 import time
+import re
 from bs4 import BeautifulSoup
 
 HEADERS = {
@@ -15,30 +16,13 @@ def clean_title(text: str) -> str:
     return text.strip()
 
 
-def parse_my_rating(item):
+def extract_douban_id(url: str) -> str | None:
     """
-    支持：
-    - rating45 class
-    - ★★★★☆ 文本
+    https://movie.douban.com/subject/1292052/
+    → 1292052
     """
-    rating_el = item.select_one(".rating")
-    if not rating_el:
-        return None
-
-    # 情况 1：class rating45
-    for cls in rating_el.get("class", []):
-        if cls.startswith("rating"):
-            try:
-                return int(cls.replace("rating", "")) / 10
-            except:
-                pass
-
-    # 情况 2：星星文本
-    stars = rating_el.text.strip()
-    if stars:
-        return stars.count("★")
-
-    return None
+    m = re.search(r"/subject/(\d+)/", url)
+    return m.group(1) if m else None
 
 
 def fetch_detail(url: str):
@@ -51,7 +35,7 @@ def fetch_detail(url: str):
     if director_el:
         director = director_el.text.strip()
 
-    genres = [g.text for g in soup.select("#info span[property='v:genre']")]
+    genres = [g.text.strip() for g in soup.select("#info span[property='v:genre']")]
 
     release_date = None
     date_el = soup.select_one("span[property='v:initialReleaseDate']")
@@ -59,12 +43,18 @@ def fetch_detail(url: str):
         release_date = date_el.text.split("(")[0]
 
     douban_rating = None
-    rating_el = soup.select_one("strong[property='v:average']")
-    if rating_el and rating_el.text.strip():
-        try:
-            douban_rating = float(rating_el.text)
-        except:
-            pass
+    for sel in [
+        "strong[property='v:average']",
+        "strong.rating_num",
+        "span.rating_num",
+    ]:
+        el = soup.select_one(sel)
+        if el and el.text.strip():
+            try:
+                douban_rating = float(el.text.strip())
+                break
+            except:
+                pass
 
     return {
         "director": director,
@@ -108,23 +98,19 @@ def fetch_all_movies(douban_user):
 
             for item in items:
                 link_el = item.select_one(".info a")
-                raw_title = link_el.text if link_el else "未知标题"
-                title = clean_title(raw_title)
+                if not link_el:
+                    continue
 
-                detail_url = link_el["href"] if link_el else None
+                title = clean_title(link_el.text)
+                detail_url = link_el["href"]
+                douban_id = extract_douban_id(detail_url)
 
-                my_rating = parse_my_rating(item)
-
-                date_el = item.select_one(".date")
-                rating_date = date_el.text.strip() if date_el else None
-
-                detail = fetch_detail(detail_url) if detail_url else {}
+                detail = fetch_detail(detail_url)
 
                 yield {
+                    "douban_id": douban_id,
                     "title": title,
                     "status": "看过" if status == "collect" else "想看",
-                    "my_rating": my_rating,
-                    "rating_date": rating_date,
                     **detail
                 }
 
