@@ -130,7 +130,7 @@ def fetch_movies_by_status(douban_user, status):
 
 
 def fetch_all_movies(douban_user):
-    all_movies = []
     for status in ["collect", "wish", "do"]:
-        all_movies.extend(fetch_movies_by_status(douban_user, status))
-    return all_movies
+        for movie in fetch_movies_by_status(douban_user, status):
+            yield movie
+
