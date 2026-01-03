@@ -1,10 +1,11 @@
 import requests
 import time
 import re
+import json
 from bs4 import BeautifulSoup
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0"
+    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64)"
 }
 
 
@@ -16,11 +17,7 @@ def clean_title(text: str) -> str:
     return text.strip()
 
 
-def extract_douban_id(url: str) -> str | None:
-    """
-    https://movie.douban.com/subject/1292052/
-    → 1292052
-    """
+def extract_douban_id(url: str):
     m = re.search(r"/subject/(\d+)/", url)
     return m.group(1) if m else None
 
@@ -31,33 +28,37 @@ def fetch_detail(url: str):
     soup = BeautifulSoup(resp.text, "html.parser")
 
     director = None
-    director_el = soup.select_one("#info span a")
-    if director_el:
-        director = director_el.text.strip()
-
-    genres = [g.text.strip() for g in soup.select("#info span[property='v:genre']")]
-
+    actors = []
+    genres = []
     release_date = None
-    date_el = soup.select_one("span[property='v:initialReleaseDate']")
-    if date_el:
-        release_date = date_el.text.split("(")[0]
-
     douban_rating = None
-    for sel in [
-        "strong[property='v:average']",
-        "strong.rating_num",
-        "span.rating_num",
-    ]:
-        el = soup.select_one(sel)
-        if el and el.text.strip():
-            try:
-                douban_rating = float(el.text.strip())
-                break
-            except:
-                pass
+
+    # ===== JSON-LD（最稳定的数据源）=====
+    ld_json = soup.find("script", type="application/ld+json")
+    if ld_json:
+        try:
+            data = json.loads(ld_json.string)
+            director = (
+                data.get("director", {}).get("name")
+                if isinstance(data.get("director"), dict)
+                else None
+            )
+            actors = [
+                a.get("name") for a in data.get("actor", []) if "name" in a
+            ]
+            genres = data.get("genre", []) or []
+            release_date = data.get("datePublished")
+            douban_rating = (
+                float(data["aggregateRating"]["ratingValue"])
+                if "aggregateRating" in data
+                else None
+            )
+        except Exception as e:
+            print("⚠️ JSON-LD 解析失败:", e)
 
     return {
         "director": director,
+        "actors": actors[:5],
         "genres": genres,
         "release_date": release_date,
         "douban_rating": douban_rating,
@@ -69,7 +70,6 @@ def fetch_all_movies(douban_user):
 
     for status in statuses:
         start = 0
-        empty_pages = 0
 
         while True:
             print(f"⏳ 抓取豆瓣 {status} start={start}")
@@ -90,11 +90,7 @@ def fetch_all_movies(douban_user):
             items = soup.select(".item")
 
             if not items:
-                empty_pages += 1
-                if empty_pages >= 2:
-                    break
-            else:
-                empty_pages = 0
+                break
 
             for item in items:
                 link_el = item.select_one(".info a")
@@ -105,14 +101,29 @@ def fetch_all_movies(douban_user):
                 detail_url = link_el["href"]
                 douban_id = extract_douban_id(detail_url)
 
+                # ⭐ 评分日期（可能没有）
+                rating_date = None
+                date_el = item.select_one(".date")
+                if date_el:
+                    rating_date = date_el.text.strip()
+
                 detail = fetch_detail(detail_url)
 
-                yield {
+                movie = {
                     "douban_id": douban_id,
                     "title": title,
                     "status": "看过" if status == "collect" else "想看",
+                    "rating_date": rating_date,
                     **detail
                 }
+
+                print("🎬 解析结果:", {
+                    "title": movie["title"],
+                    "actors": movie["actors"],
+                    "rating_date": movie["rating_date"]
+                })
+
+                yield movie
 
                 time.sleep(1)
 
