@@ -1,15 +1,59 @@
 import requests
 import time
+import re
 from bs4 import BeautifulSoup
-
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0"
 }
 
 
-def clean_title(raw):
-    return raw.split("/")[0].strip()
+def clean_title(text: str) -> str:
+    """
+    鬼吹灯之龙岭迷窟 / Candle in the Tomb [可播放]
+    → 鬼吹灯之龙岭迷窟
+    """
+    text = text.split("\n")[0]
+    text = text.split("/")[0]
+    text = text.replace("[可播放]", "")
+    return text.strip()
+
+
+def fetch_detail(url: str):
+    resp = requests.get(url, headers=HEADERS, timeout=10)
+    resp.raise_for_status()
+    soup = BeautifulSoup(resp.text, "html.parser")
+
+    # 导演
+    director = None
+    director_el = soup.select_one("#info span a")
+    if director_el:
+        director = director_el.text.strip()
+
+    # 类型
+    genres = [g.text for g in soup.select("#info span[property='v:genre']")]
+
+    # 上映日期
+    release_date = None
+    date_el = soup.select_one("span[property='v:initialReleaseDate']")
+    if date_el:
+        release_date = date_el.text.split("(")[0]
+
+    # 豆瓣评分
+    rating = None
+    rating_el = soup.select_one("strong[property='v:average']")
+    if rating_el:
+        try:
+            rating = float(rating_el.text)
+        except:
+            pass
+
+    return {
+        "director": director,
+        "genres": genres,
+        "release_date": release_date,
+        "douban_rating": rating,
+    }
 
 
 def fetch_all_movies(douban_user):
@@ -31,12 +75,7 @@ def fetch_all_movies(douban_user):
                 "mode": "grid"
             }
 
-            resp = requests.get(
-                url,
-                headers=HEADERS,
-                params=params,
-                timeout=10
-            )
+            resp = requests.get(url, headers=HEADERS, params=params, timeout=10)
             resp.raise_for_status()
 
             soup = BeautifulSoup(resp.text, "html.parser")
@@ -50,33 +89,39 @@ def fetch_all_movies(douban_user):
                 empty_pages = 0
 
             for item in items:
-                title_raw = item.select_one(".title")
-                title = clean_title(title_raw.text) if title_raw else "未知标题"
+                title_el = item.select_one(".title")
+                raw_title = title_el.text if title_el else "未知标题"
+                title = clean_title(raw_title)
 
-                rating_el = item.select_one(".rating_nums")
-                douban_rating = float(rating_el.text) if rating_el else None
+                link_el = item.select_one("a")
+                detail_url = link_el["href"] if link_el else None
 
-                my_rating_el = item.select_one(".rating")
+                # 我的评分
                 my_rating = None
-                if my_rating_el:
-                    cls = my_rating_el.get("class", [])
-                    for c in cls:
-                        if c.startswith("rating"):
+                rating_el = item.select_one(".rating")
+                if rating_el:
+                    for cls in rating_el.get("class", []):
+                        if cls.startswith("rating"):
                             try:
-                                my_rating = int(c.replace("rating", "")) / 10
+                                my_rating = int(cls.replace("rating", "")) / 10
                             except:
                                 pass
 
+                # 评分日期
                 date_el = item.select_one(".date")
                 rating_date = date_el.text if date_el else None
+
+                detail = fetch_detail(detail_url) if detail_url else {}
 
                 yield {
                     "title": title,
                     "status": "看过" if status == "collect" else "想看",
-                    "douban_rating": douban_rating,
                     "my_rating": my_rating,
                     "rating_date": rating_date,
+                    **detail
                 }
+
+                time.sleep(1)
 
             start += 15
             time.sleep(2)
