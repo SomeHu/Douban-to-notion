@@ -1,50 +1,39 @@
-import os
 import requests
-
-NOTION_API = "https://api.notion.com/v1/pages"
-NOTION_TOKEN = os.getenv("NOTION_TOKEN")
-DATABASE_ID = os.getenv("NOTION_DATABASE_ID")
+from bs4 import BeautifulSoup
+import re
+import time
 
 HEADERS = {
-    "Authorization": f"Bearer {NOTION_TOKEN}",
-    "Notion-Version": "2022-06-28",
-    "Content-Type": "application/json"
+    "User-Agent": "Mozilla/5.0"
 }
 
-def create_movie(movie):
-    props = {
-        "剧名": {
-            "title": [
-                {"text": {"content": movie["title"]}}
-            ]
-        },
-        "豆瓣ID": {
-            "rich_text": [
-                {"text": {"content": movie["douban_id"]}}
-            ]
-        },
-        "链接": {
-            "url": movie["link"]
-        }
-    }
+def fetch_collect_movies(douban_user, page_limit=1):
+    movies = []
 
-    if movie.get("year"):
-        props["年份"] = {"number": int(movie["year"])}
+    for page in range(page_limit):
+        url = f"https://movie.douban.com/people/{douban_user}/collect?start={page*15}"
+        resp = requests.get(url, headers=HEADERS, timeout=10)
+        resp.raise_for_status()
 
-    if movie.get("rating"):
-        props["评分"] = {"number": float(movie["rating"])}
+        soup = BeautifulSoup(resp.text, "html.parser")
+        items = soup.select(".item")
 
-    if movie.get("my_rating"):
-        props["我的评分"] = {"number": int(movie["my_rating"])}
+        for item in items:
+            title = item.select_one(".title")
+            link = item.select_one("a")
 
-    payload = {
-        "parent": {"database_id": DATABASE_ID},
-        "properties": props
-    }
+            if not title or not link:
+                continue
 
-    res = requests.post(NOTION_API, headers=HEADERS, json=payload)
+            m = re.search(r"/subject/(\\d+)/", link["href"])
+            douban_id = m.group(1) if m else None
 
-    if res.status_code != 200:
-        print("❌ Notion Error:", res.text)
+            movies.append({
+                "title": title.text.strip(),
+                "douban_id": douban_id,
+                "url": link["href"]
+            })
 
-    res.raise_for_status()
+        time.sleep(1)
+
+    return movies
