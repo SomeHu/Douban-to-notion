@@ -8,9 +8,8 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0"
 }
 
-
 # ---------------------------
-# 工具函数
+# 通用工具
 # ---------------------------
 
 def clean_title(text: str) -> str:
@@ -22,19 +21,11 @@ def clean_title(text: str) -> str:
 
 
 def extract_douban_id(url: str) -> str | None:
-    """
-    https://movie.douban.com/subject/1292052/
-    → 1292052
-    """
     m = re.search(r"/subject/(\d+)/", url)
     return m.group(1) if m else None
 
 
 def extract_chinese_name(name: str) -> str | None:
-    """
-    费启鸣 Qiming Fei → 费启鸣
-    Kim Soo-hyun → None
-    """
     parts = re.findall(r"[\u4e00-\u9fff]+", name)
     if not parts:
         return None
@@ -42,7 +33,7 @@ def extract_chinese_name(name: str) -> str | None:
 
 
 # ---------------------------
-# 详情页解析
+# 详情页（公共信息）
 # ---------------------------
 
 def fetch_detail(url: str):
@@ -61,7 +52,7 @@ def fetch_detail(url: str):
         try:
             data = json.loads(ld_json.string)
 
-            # 🎬 导演（dict / list 全兼容）
+            # 🎬 导演
             raw_director = data.get("director")
             if isinstance(raw_director, dict):
                 name = extract_chinese_name(raw_director.get("name", ""))
@@ -73,7 +64,7 @@ def fetch_detail(url: str):
                     if name:
                         directors.append(name)
 
-            # 🎭 主演（只保留中文）
+            # 🎭 主演（只中文）
             for a in data.get("actor", []):
                 cn = extract_chinese_name(a.get("name", ""))
                 if cn:
@@ -95,8 +86,8 @@ def fetch_detail(url: str):
             print("⚠️ JSON-LD 解析失败:", e)
 
     return {
-        "director": list(dict.fromkeys(directors)),  # 去重但保序
-        "actors": list(dict.fromkeys(actors))[:5],   # 前 5 位主演
+        "director": list(dict.fromkeys(directors)),
+        "actors": list(dict.fromkeys(actors))[:5],
         "genres": genres,
         "release_date": release_date,
         "douban_rating": douban_rating,
@@ -104,7 +95,7 @@ def fetch_detail(url: str):
 
 
 # ---------------------------
-# 抓取用户全部影视
+# 用户全部影视（含评分日期）
 # ---------------------------
 
 def fetch_all_movies(douban_user):
@@ -148,12 +139,20 @@ def fetch_all_movies(douban_user):
                 detail_url = link_el["href"]
                 douban_id = extract_douban_id(detail_url)
 
+                # ⭐ 评分日期（只在“看过”里有）
+                rating_date = None
+                if status == "collect":
+                    date_el = item.select_one(".date")
+                    if date_el:
+                        rating_date = date_el.text.strip()
+
                 detail = fetch_detail(detail_url)
 
                 yield {
                     "douban_id": douban_id,
                     "title": title,
                     "status": "看过" if status == "collect" else "想看",
+                    "rating_date": rating_date,
                     **detail
                 }
 
