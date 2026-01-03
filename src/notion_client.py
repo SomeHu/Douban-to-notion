@@ -7,10 +7,6 @@ class NotionClient:
         self.database_id = database_id
 
     def find_by_douban_id(self, douban_id: str):
-        """
-        用 search API 查找指定 database 中 douban_id 相同的页面
-        兼容老版本 notion-client
-        """
         resp = self.client.search(
             query=douban_id,
             filter={"property": "object", "value": "page"}
@@ -61,12 +57,23 @@ class NotionClient:
 
         if movie.get("director"):
             props["导演"] = {
-                "rich_text": [{"text": {"content": movie["director"]}}]
+                "rich_text": [
+                    {"text": {"content": movie["director"]}}
+                ]
+            }
+
+        if movie.get("actors"):
+            props["主演"] = {
+                "multi_select": [
+                    {"name": actor} for actor in movie["actors"]
+                ]
             }
 
         if movie.get("genres"):
             props["类型"] = {
-                "multi_select": [{"name": g} for g in movie["genres"]]
+                "multi_select": [
+                    {"name": g} for g in movie["genres"]
+                ]
             }
 
         if movie.get("release_date"):
