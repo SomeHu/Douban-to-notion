@@ -9,7 +9,7 @@ def main():
         raise ValueError("❌ 缺少环境变量 DOUBAN_USER")
 
     notion = NotionClient()
-
+    notion.cleanup_duplicates()
     print("🚀 开始同步（去重 + 强制更新）")
 
     for movie in fetch_all_movies(douban_user):
