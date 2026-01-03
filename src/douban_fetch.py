@@ -22,6 +22,11 @@ def extract_douban_id(url: str):
     return m.group(1) if m else None
 
 
+def is_chinese_name(name: str) -> bool:
+    """只保留包含中文字符的名字"""
+    return bool(re.search(r"[\u4e00-\u9fff]", name))
+
+
 def fetch_detail(url: str):
     resp = requests.get(url, headers=HEADERS, timeout=10)
     resp.raise_for_status()
@@ -33,32 +38,41 @@ def fetch_detail(url: str):
     release_date = None
     douban_rating = None
 
-    # ===== JSON-LD（最稳定的数据源）=====
+    # ===== JSON-LD（稳定来源）=====
     ld_json = soup.find("script", type="application/ld+json")
     if ld_json:
         try:
             data = json.loads(ld_json.string)
-            director = (
-                data.get("director", {}).get("name")
-                if isinstance(data.get("director"), dict)
-                else None
-            )
-            actors = [
-                a.get("name") for a in data.get("actor", []) if "name" in a
-            ]
+
+            # 导演
+            if isinstance(data.get("director"), dict):
+                director = data["director"].get("name")
+
+            # 主演（只保留中文名）
+            raw_actors = data.get("actor", [])
+            for a in raw_actors:
+                name = a.get("name", "").strip()
+                if name and is_chinese_name(name):
+                    actors.append(name)
+
+            # 类型
             genres = data.get("genre", []) or []
+
+            # 上映日期
             release_date = data.get("datePublished")
-            douban_rating = (
-                float(data["aggregateRating"]["ratingValue"])
-                if "aggregateRating" in data
-                else None
-            )
+
+            # 豆瓣评分
+            if "aggregateRating" in data:
+                douban_rating = float(
+                    data["aggregateRating"]["ratingValue"]
+                )
+
         except Exception as e:
             print("⚠️ JSON-LD 解析失败:", e)
 
     return {
         "director": director,
-        "actors": actors[:5],
+        "actors": actors[:5],  # 最多 5 个，足够用了
         "genres": genres,
         "release_date": release_date,
         "douban_rating": douban_rating,
@@ -101,7 +115,6 @@ def fetch_all_movies(douban_user):
                 detail_url = link_el["href"]
                 douban_id = extract_douban_id(detail_url)
 
-                # ⭐ 评分日期（可能没有）
                 rating_date = None
                 date_el = item.select_one(".date")
                 if date_el:
@@ -109,21 +122,13 @@ def fetch_all_movies(douban_user):
 
                 detail = fetch_detail(detail_url)
 
-                movie = {
+                yield {
                     "douban_id": douban_id,
                     "title": title,
                     "status": "看过" if status == "collect" else "想看",
                     "rating_date": rating_date,
                     **detail
                 }
-
-                print("🎬 解析结果:", {
-                    "title": movie["title"],
-                    "actors": movie["actors"],
-                    "rating_date": movie["rating_date"]
-                })
-
-                yield movie
 
                 time.sleep(1)
 
