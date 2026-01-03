@@ -50,7 +50,14 @@ class NotionClient:
         }
 
         if movie.get("douban_rating") is not None:
-            props["豆瓣评分"] = {"number": movie["douban_rating"]}
+            props["豆瓣评分"] = {
+                "number": movie["douban_rating"]
+            }
+
+        if movie.get("rating_date"):
+            props["评分日期"] = {
+                "date": {"start": movie["rating_date"]}
+            }
 
         if movie.get("director"):
             props["导演"] = {
