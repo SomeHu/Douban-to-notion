@@ -1,5 +1,4 @@
 from notion_client import Client
-from datetime import datetime
 
 
 class NotionClient:
@@ -7,75 +6,33 @@ class NotionClient:
         self.client = Client(auth=token)
         self.database_id = database_id
 
-        self.status_map = {
-            "collect": "看过",
-            "wish": "想看",
-            "do": "在看"
-        }
-
     def create_movie(self, movie):
+        print("🧾 写入 Notion：", movie["title"])
+
         properties = {
-            "Name": {
+            "标题": {
                 "title": [
                     {"text": {"content": movie["title"]}}
                 ]
             },
-            "Douban ID": {
-                "rich_text": [
-                    {"text": {"content": movie.get("douban_id", "")}}
-                ]
-            },
-            "Douban Link": {
-                "url": movie.get("url")
-            },
-            "Status": {
-                "select": {
-                    "name": self.status_map.get(movie["status"], "看过")
-                }
-            },
-            "Sync Time": {
-                "date": {
-                    "start": datetime.utcnow().isoformat()
-                }
+            "状态": {
+                "select": {"name": movie["status"]}
             }
         }
 
         if movie.get("douban_rating") is not None:
-            properties["Douban Rating"] = {
+            properties["豆瓣评分"] = {
                 "number": movie["douban_rating"]
             }
 
-        if movie.get("director"):
-            properties["Director"] = {
-                "rich_text": [
-                    {"text": {"content": movie["director"]}}
-                ]
-            }
-
-        if movie.get("release_date"):
-            properties["Release Date"] = {
-                "date": {
-                    "start": movie["release_date"]
-                }
-            }
-
-        if movie.get("genres"):
-            properties["Genres"] = {
-                "multi_select": [
-                    {"name": g} for g in movie["genres"]
-                ]
-            }
-
         if movie.get("my_rating") is not None:
-            properties["My Rating"] = {
+            properties["我的评分"] = {
                 "number": movie["my_rating"]
             }
 
         if movie.get("rating_date"):
-            properties["Rating Date"] = {
-                "date": {
-                    "start": movie["rating_date"]
-                }
+            properties["评分日期"] = {
+                "date": {"start": movie["rating_date"]}
             }
 
         self.client.pages.create(
