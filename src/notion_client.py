@@ -6,28 +6,32 @@ class NotionClient:
         self.client = Client(auth=token)
         self.database_id = database_id
 
-    def create_movie(self, movie):
-        title = movie.get("title") or "未命名"
+    def find_by_douban_id(self, douban_id: str):
+        resp = self.client.databases.query(
+            database_id=self.database_id,
+            filter={
+                "property": "douban_id",
+                "rich_text": {"equals": douban_id}
+            }
+        )
+        results = resp.get("results", [])
+        return results[0]["id"] if results else None
 
-        print("🧾 写入 Notion：", title)
-
+    def build_props(self, movie: dict):
         props = {
             "标题": {
-                "title": [{"text": {"content": title}}]
+                "title": [{"text": {"content": movie["title"]}}]
             },
             "状态": {
                 "select": {"name": movie["status"]}
+            },
+            "douban_id": {
+                "rich_text": [{"text": {"content": movie["douban_id"]}}]
             }
         }
 
         if movie.get("douban_rating") is not None:
             props["豆瓣评分"] = {"number": movie["douban_rating"]}
-
-        if movie.get("my_rating") is not None:
-            props["我的评分"] = {"number": movie["my_rating"]}
-
-        if movie.get("rating_date"):
-            props["评分日期"] = {"date": {"start": movie["rating_date"]}}
 
         if movie.get("director"):
             props["导演"] = {
@@ -44,7 +48,21 @@ class NotionClient:
                 "date": {"start": movie["release_date"]}
             }
 
-        self.client.pages.create(
-            parent={"database_id": self.database_id},
-            properties=props
-        )
+        return props
+
+    def upsert_movie(self, movie: dict):
+        page_id = self.find_by_douban_id(movie["douban_id"])
+        props = self.build_props(movie)
+
+        if page_id:
+            print("🔁 更新：", movie["title"])
+            self.client.pages.update(
+                page_id=page_id,
+                properties=props
+            )
+        else:
+            print("🆕 新建：", movie["title"])
+            self.client.pages.create(
+                parent={"database_id": self.database_id},
+                properties=props
+            )
