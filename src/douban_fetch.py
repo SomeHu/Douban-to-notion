@@ -1,76 +1,50 @@
+import os
 import requests
-from bs4 import BeautifulSoup
-import time
-import re
+
+NOTION_API = "https://api.notion.com/v1/pages"
+NOTION_TOKEN = os.getenv("NOTION_TOKEN")
+DATABASE_ID = os.getenv("NOTION_DATABASE_ID")
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"
+    "Authorization": f"Bearer {NOTION_TOKEN}",
+    "Notion-Version": "2022-06-28",
+    "Content-Type": "application/json"
 }
 
-def fetch_collect_movies(user_id, page_limit=1):
-    results = []
+def create_movie(movie):
+    props = {
+        "剧名": {
+            "title": [
+                {"text": {"content": movie["title"]}}
+            ]
+        },
+        "豆瓣ID": {
+            "rich_text": [
+                {"text": {"content": movie["douban_id"]}}
+            ]
+        },
+        "链接": {
+            "url": movie["link"]
+        }
+    }
 
-    for page in range(page_limit):
-        start = page * 15
-        url = (
-            f"https://movie.douban.com/people/{user_id}/collect"
-            f"?start={start}&sort=time&rating=all&filter=all&mode=grid"
-        )
+    if movie.get("year"):
+        props["年份"] = {"number": int(movie["year"])}
 
-        resp = requests.get(url, headers=HEADERS, timeout=10)
-        if resp.status_code != 200:
-            break
+    if movie.get("rating"):
+        props["评分"] = {"number": float(movie["rating"])}
 
-        soup = BeautifulSoup(resp.text, "lxml")
-        items = soup.select(".grid-view .item")
-        if not items:
-            break
+    if movie.get("my_rating"):
+        props["我的评分"] = {"number": int(movie["my_rating"])}
 
-        for item in items:
-            title_node = item.select_one(".title")
-            if not title_node:
-                continue
-            title_text = title_node.text.strip()
+    payload = {
+        "parent": {"database_id": DATABASE_ID},
+        "properties": props
+    }
 
-            link_tag = item.select_one("a")
-            if not link_tag:
-                continue
-            link = link_tag.get("href", "")
+    res = requests.post(NOTION_API, headers=HEADERS, json=payload)
 
-            match = re.search(r"subject/(\d+)/", link)
-            if not match:
-                continue
-            douban_id = match.group(1)
+    if res.status_code != 200:
+        print("❌ Notion Error:", res.text)
 
-            year = None
-            intro = item.select_one(".intro")
-            if intro:
-                year_match = re.search(r"(\d{4})", intro.text)
-                if year_match:
-                    year = year_match.group(1)
-
-            rating = None
-            rating_node = item.select_one(".rating_num")
-            if rating_node:
-                rating = rating_node.text.strip()
-
-            my_rating = None
-            star = item.select_one(".rating")
-            if star:
-                for cls in star.get("class", []):
-                    if cls.startswith("rating"):
-                        my_rating = cls.replace("rating", "")
-                        break
-
-            results.append({
-                "title": title_text,
-                "year": year,
-                "douban_id": douban_id,
-                "rating": rating,
-                "my_rating": my_rating,
-                "link": link
-            })
-
-        time.sleep(1)
-
-    return results
+    res.raise_for_status()
