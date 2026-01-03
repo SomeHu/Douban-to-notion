@@ -7,11 +7,13 @@ class NotionClient:
         self.database_id = database_id
 
     def create_movie(self, movie):
-        print("🧾 写入 Notion：", movie["title"])
+        title = movie.get("title") or "未命名"
+
+        print("🧾 写入 Notion：", title)
 
         props = {
             "标题": {
-                "title": [{"text": {"content": movie["title"]}}]
+                "title": [{"text": {"content": title}}]
             },
             "状态": {
                 "select": {"name": movie["status"]}
