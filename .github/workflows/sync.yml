@@ -1,6 +1,12 @@
-name: Douban to Notion
+name: Douban to Notion Sync
 
 on:
+  schedule:
+    # 北京时间 12:00
+    - cron: "0 4 * * *"
+    # 北京时间 24:00（也就是第二天 00:00）
+    - cron: "0 16 * * *"
+
   workflow_dispatch:
 
 jobs:
@@ -8,17 +14,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.10"
 
-      - run: pip install -r requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
       - name: Run sync
-        run: python -m src.main
         env:
           DOUBAN_USER: ${{ secrets.DOUBAN_USER }}
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+        run: |
+          python -m src.main
